@@ -1,0 +1,65 @@
+---
+name: Run Automated Tests
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Todoism product
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Run Flask app
+        run: |
+          source venv/bin/activate
+          flask initdb
+          flask translate compile
+          nohup flask run > flask.log 2>&1 &
+
+      - name: Checkout test repository
+        run: git clone https://github.com/Juanda0/todo-workflow-tests.git
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install tests deps
+        run: |
+          cd todo-workflow-tests
+          npm ci
+
+      - name: Install Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: |
+          cd todo-workflow-tests
+          npx playwright test todo-main-test.spec.ts --trace on
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        if: ${{!cancelled()}}
+        with:
+          name: playwright-report
+          path: todo-workflow-tests/playwright-report/
+          retention-days: 1
